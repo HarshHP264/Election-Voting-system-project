@@ -12,12 +12,19 @@
 #define MAX_PASSWD_LEN 50
 #define MAX_PASSWD_LEN 50
 #define MAX_NAME_LEN 50 // Maximum length of candidate name + 1 for null terminator
+bool hasVoted(const char *rollNumber);
+void writeVotedRollNumber(const char *rollNumber);
 // Function prototypes
+
+#define VOTED_FILE "voted.txt"
 void adminLogin();
 void studentLogin();
+void loadCandidateData();
+void saveCandidateData();
 
 int main()
 {
+    loadCandidateData();
     while (1)
     {
         printf("\n");
@@ -66,8 +73,9 @@ void adminLogin()
 {
     char username[MAX_USERNAME_LEN];
     char passwd[MAX_PASSWD_LEN];
-    // Maximum length of filename + 4 for ".csv" extension
+    // Maximum length of filename + 4 for ".txt" extension
 admin_login:
+    loadCandidateData();
     // Input admin username
     printf("*********************************************\n");
     printf("*                 ADMIN LOGIN               *\n");
@@ -89,6 +97,7 @@ admin_login:
         system("cls");
         int adminChoice;
         int voteCounts[numCandidates];
+        int totalvotes;
         // Find the candidate with the most votes
         int maxVotesIndex = 0;
         do
@@ -145,7 +154,7 @@ admin_login:
                 // Create a separate text file for each candidate
                 for (int i = 0; i < numCandidates; i++)
                 {
-                    sprintf(filename, "%s.csv", candidateNames[i]);
+                    sprintf(filename, "%s.txt", candidateNames[i]);
                     FILE *file = fopen(filename, "w");
                     if (file == NULL)
                     {
@@ -157,6 +166,7 @@ admin_login:
                         fclose(file);
                     }
                 }
+                saveCandidateData();
                 printf("Kindly press (ENTER) to proceed to MAIN MENU.");
                 getch();
                 system("cls");
@@ -172,15 +182,15 @@ admin_login:
                 printf("Enter the roll number of the student whose vote needs to be deleted: ");
                 scanf("%s", rollNumberToDelete);
 
-                // Iterate through each candidate's CSV file and remove the roll number if found
+                // Iterate through each candidate's txt file and remove the roll number if found
                 for (int i = 0; i < numCandidates; i++)
                 {
-                    sprintf(filename, "%s.csv", candidateNames[i]);
+                    sprintf(filename, "%s.txt", candidateNames[i]);
                     FILE *file = fopen(filename, "r");
                     if (file != NULL)
                     {
                         // Create a temporary file to store the updated contents
-                        FILE *tempFile = fopen("temp.csv", "w");
+                        FILE *tempFile = fopen("temp.txt", "w");
                         if (tempFile == NULL)
                         {
                             printf("Error creating temporary file.\n");
@@ -202,7 +212,7 @@ admin_login:
 
                         // Replace the original file with the temporary file
                         remove(filename);
-                        rename("temp.csv", filename);
+                        rename("temp.txt", filename);
                     }
                     else
                     {
@@ -217,6 +227,7 @@ admin_login:
                 break;
 
                 break;
+
             case 3:
                 system("cls");
                 printf("*********************************************\n");
@@ -224,24 +235,24 @@ admin_login:
                 printf("*********************************************\n");
 
                 // Array to store the vote counts for each candidate
-
+                totalvotes = 0;
                 for (int i = 0; i < numCandidates; i++)
                 {
                     voteCounts[i] = 0;
                 }
 
-                // Iterate through each candidate's CSV file and count the votes
+                // Iterate through each candidate's txt file and count the votes
                 for (int i = 0; i < numCandidates; i++)
                 {
-                    sprintf(filename, "%s.csv", candidateNames[i]);
+                    sprintf(filename, "%s.txt", candidateNames[i]);
                     FILE *file = fopen(filename, "r");
                     if (file != NULL)
                     {
                         char line[1024];
                         while (fgets(line, sizeof(line), file))
                         {
-                            // Each line represents one vote
                             voteCounts[i]++;
+                            totalvotes++;
                         }
                         fclose(file);
                     }
@@ -256,10 +267,11 @@ admin_login:
                 }
 
                 // Display the results
-                printf("Candidate\tVotes\n");
+                printf("Candidate\tVotes\tPercentage\n");
                 for (int i = 0; i < numCandidates; i++)
                 {
-                    printf("%s\t\t%d\n", candidateNames[i], voteCounts[i]);
+                    float percentage = (float)voteCounts[i] / totalvotes * 100;
+                    printf("%s\t\t%d\t%.2f%%\n", candidateNames[i], voteCounts[i], percentage);
                 }
                 printf("=============================================\n");
                 printf("Winner: %s\n", candidateNames[maxVotesIndex]);
@@ -268,7 +280,37 @@ admin_login:
                 getch();
                 system("cls");
                 break;
+
             case 4:
+                if (numCandidates > 0)
+                {
+                    printf("Continuing previous election...\n");
+                    // Load candidate data from files if available
+                    FILE *candidatesFile = fopen("candidates.txt", "r");
+                    if (candidatesFile != NULL)
+                    {
+                        fscanf(candidatesFile, "%d\n", &numCandidates);
+                        for (int i = 0; i < numCandidates; i++)
+                        {
+                            fgets(candidateNames[i], sizeof(candidateNames[i]), candidatesFile);
+                            candidateNames[i][strcspn(candidateNames[i], "\n")] = '\0'; // Remove newline character
+                        }
+                        fclose(candidatesFile);
+                        printf("Candidate data loaded successfully.\n");
+                    }
+                    else
+                    {
+                        printf("Error opening candidates file!\n");
+                    }
+                    // Add any other necessary data loading for continuing the previous election
+                    // Now you can proceed with other operations related to the previous election
+                }
+                else
+                {
+                    printf("No candidates data available. Please load candidates for a new election.\n");
+                }
+                break;
+            case 5:
                 printf("Logging out...\n");
                 system("cls");
                 break;
@@ -425,30 +467,15 @@ void studentLogin()
                 else
                 {
                     // Check if the student has already voted for any candidate
-                    for (int i = 0; i < numCandidates; i++)
+                    if (hasVoted(rollNumber))
                     {
-                        sprintf(filename, "%s.csv", candidateNames[i]);
-                        FILE *file = fopen(filename, "r");
-                        if (file != NULL)
-                        {
-                            char line[1024];
-                            while (fgets(line, sizeof(line), file))
-                            {
-                                char *token;
-                                token = strtok(line, ",");
-                                if (strcmp(token, user.rollNumber) == 0)
-                                {
-                                    printf("You have already voted! You cannot vote again.\n");
-                                    fclose(file);
-                                    goto end_voting;
-                                }
-                            }
-                            fclose(file);
-                        }
+                        printf("You have already voted! You cannot vote again.\n");
+                        goto end_voting;
                     }
-
+                    // Write student's roll number to the voted file
+                    writeVotedRollNumber(rollNumber);
                     // Write student's roll number and username to the chosen candidate's file
-                    sprintf(filename, "%s.csv", candidateNames[voteChoice - 1]);
+                    sprintf(filename, "%s.txt", candidateNames[voteChoice - 1]);
                     FILE *file = fopen(filename, "a");
                     if (file == NULL)
                     {
@@ -552,7 +579,7 @@ int isValidCandidateName(const char *name)
 
 void writeUserToFile(struct User user)
 {
-    FILE *file = fopen("Users.csv", "a");
+    FILE *file = fopen("Users.txt", "a");
     if (file == NULL)
     {
         printf("Error opening file!\n");
@@ -567,7 +594,7 @@ void writeUserToFile(struct User user)
 
 int findUserByRollNumber(char *rollNumber, char *username, char *passwd)
 {
-    FILE *file = fopen("Users.csv", "r");
+    FILE *file = fopen("Users.txt", "r");
     if (file == NULL)
     {
         printf("Error opening file!\n");
@@ -608,4 +635,72 @@ bool isValidRollNumber(const char *rollNumber)
         return false;
     }
     return true;
+}
+
+bool hasVoted(const char *rollNumber)
+{
+    FILE *file = fopen(VOTED_FILE, "r");
+    if (file == NULL)
+    {
+        return false; // If file doesn't exist, assume the student hasn't voted
+    }
+    char line[MAX_ROLL_NUM_LEN];
+    while (fgets(line, sizeof(line), file))
+    {
+        if (strcmp(line, rollNumber) == 0)
+        {
+            fclose(file);
+            return true; // Roll number found in voted file
+        }
+    }
+    fclose(file);
+    return false; // Roll number not found in voted file
+}
+
+void writeVotedRollNumber(const char *rollNumber)
+{
+    FILE *file = fopen(VOTED_FILE, "a");
+    if (file == NULL)
+    {
+        printf("Error opening voted file!\n");
+        return;
+    }
+    fprintf(file, "%s\n", rollNumber);
+    fclose(file);
+}
+
+// Function to load candidate data from files
+void loadCandidateData()
+{
+    FILE *file = fopen("candidates.txt", "r");
+    if (file == NULL)
+    {
+        printf("Candidates file not found. No candidates loaded.\n");
+        return;
+    }
+    numCandidates = 0;
+    while (fgets(candidateNames[numCandidates], sizeof(candidateNames[numCandidates]), file))
+    {
+        candidateNames[numCandidates][strcspn(candidateNames[numCandidates], "\n")] = '\0'; // Remove newline character
+        numCandidates++;
+    }
+    fclose(file);
+    printf("Candidates loaded successfully.\n");
+}
+
+// Function to save candidate data to files
+void saveCandidateData()
+{
+    FILE *file = fopen("candidates.txt", "w");
+    if (file == NULL)
+    {
+        printf("Error opening candidates file for writing.\n");
+        return;
+    }
+    for (int i = 0; i < numCandidates; i++)
+    {
+        fprintf(file, "%s\n", candidateNames[i]);
+    }
+    fclose(file);
+    printf("Candidates saved successfully.\n");
 }
