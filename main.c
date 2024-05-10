@@ -5,26 +5,34 @@
 #include <conio.h> // taken For getch() on Windows
 #include <ctype.h>
 #include <stdbool.h>
+#include <time.h>
 
 // Define maximum lengths
 #define MAX_USERNAME_LEN 50
 #define MAX_ROLL_NUM_LEN 12
 #define MAX_PASSWD_LEN 50
-#define MAX_PASSWD_LEN 50
 #define MAX_NAME_LEN 50 // Maximum length of candidate name + 1 for null terminator
+    time_t currentTime;
+struct tm* localTime;
 bool hasVoted(const char *rollNumber);
 void writeVotedRollNumber(const char *rollNumber);
 // Function prototypes
-
 #define VOTED_FILE "voted.txt"
 void adminLogin();
 void studentLogin();
 void loadCandidateData();
 void saveCandidateData();
+int loadAllowedRollNumbers(char allowedRollNumbers[][MAX_ROLL_NUM_LEN]);
+
+int numCandidates;
+char candidateNames[100][MAX_NAME_LEN]; // Assuming max 100 candidates
+char filename[MAX_NAME_LEN + 4];
+bool isEligible(const char *rollNumber, char allowedRollNumbers[][MAX_ROLL_NUM_LEN], int numAllowedRollNumbers);
 
 int main()
 {
     loadCandidateData();
+
     while (1)
     {
         printf("\n");
@@ -33,8 +41,8 @@ int main()
         printf("*********************************************\n");
         printf("* %-10s %s \t\t\t    *\n", "OPTION", "\tACTION");
         printf("*-------------------------------------------*\n");
-        printf("*   %-10d %s \t\t    *\n", 1, "STUDENT LOGIN");
-        printf("*   %-10d %s  \t\t    *\n", 2, "ADMIN LOGIN");
+        printf("*   %-10d %s          *\n", 1, "STUDENT VOTER LOGIN");
+        printf("*   %-10d %s       *\n", 2, "ELECTION OFFICER LOGIN");
         printf("*   %-10d %s \t\t\t    *\n", 3, "EXIT");
         printf("*********************************************\n");
         printf("SELECT CHOICE   :");
@@ -65,9 +73,6 @@ int main()
 int validateAdmin(const char *username, const char *passwd);
 void getPassword(char *passwd);
 int isValidCandidateName(const char *name);
-int numCandidates;
-char candidateNames[100][MAX_NAME_LEN]; // Assuming max 100 candidates
-char filename[MAX_NAME_LEN + 4];
 
 void adminLogin()
 {
@@ -78,20 +83,20 @@ admin_login:
     loadCandidateData();
     // Input admin username
     printf("*********************************************\n");
-    printf("*                 ADMIN LOGIN               *\n");
+    printf("*           ELECTION OFFICER LOGIN          *\n");
     printf("*********************************************\n");
-    printf("Enter Admin Username    :");
+    printf("Enter Officer Username    :");
     scanf("%s", username);
 
     // Input admin password without echoing characters
-    printf("Enter Admin Password    :");
+    printf("Enter Officer Password    :");
     getPassword(passwd);
     printf("\n");
 
     // Validate admin credentials
     if (validateAdmin(username, passwd))
     {
-        printf("Admin login successful!\n");
+        printf("Officer login successful!\n");
         printf("Please tap the (ENTER) key to initiate the operation.");
         getch();
         system("cls");
@@ -102,6 +107,7 @@ admin_login:
         int maxVotesIndex = 0;
         do
         {
+            
             // Display admin menu options
             printf("\n");
             printf("*********************************************\n");
@@ -121,6 +127,10 @@ admin_login:
             {
             case 1:
                 system("cls");
+                time(&currentTime);
+    localTime = localtime(&currentTime);
+
+    printf("Date: %s", asctime(localTime));
                 // Prompt admin to enter the number of candidates
                 printf("*********************************************\n");
                 printf("*              CANDIDATES DETAILS           *\n");
@@ -219,7 +229,39 @@ admin_login:
                         printf("Error opening file for candidate %s.\n", candidateNames[i]);
                     }
                 }
+// Remove the roll number from the "voted.txt" file
+                FILE *votedFile = fopen("voted.txt", "r");
+                if (votedFile != NULL)
+                {
+                    // Create a temporary file to store the updated contents
+                    FILE *tempFile = fopen("temp_voted.txt", "w");
+                    if (tempFile == NULL)
+                    {
+                        printf("Error creating temporary file for voted.\n");
+                        fclose(votedFile);
+                        return;
+                    }
+                    char line[1024];
+                    while (fgets(line, sizeof(line), votedFile))
+                    {
+                        // Check if the current line contains the roll number to delete
+                        if (strstr(line, rollNumberToDelete) == NULL)
+                        {
+                            // If not found, write the line to the temporary file
+                            fputs(line, tempFile);
+                        }
+                    }
+                    fclose(votedFile);
+                    fclose(tempFile);
 
+                    // Replace the original "voted.txt" file with the temporary file
+                    remove("voted.txt");
+                    rename("temp_voted.txt", "voted.txt");
+                }
+                else
+                {
+                    printf("Error opening voted file.\n");
+                }
                 printf("Illegal vote with roll number %s deleted successfully.\n", rollNumberToDelete);
                 printf("Kindly press (ENTER) to proceed to MAIN MENU.");
                 getch();
@@ -230,6 +272,10 @@ admin_login:
 
             case 3:
                 system("cls");
+                 time(&currentTime);
+    localTime = localtime(&currentTime);
+
+    printf("Date: %s", asctime(localTime));
                 printf("*********************************************\n");
                 printf("*              ELECTION RESULT              *\n");
                 printf("*********************************************\n");
@@ -357,6 +403,7 @@ void writeUserToFile(struct User user);
 int findUserByRollNumber(char *rollNumber, char *username, char *passwd);
 bool isValidRollNumber(const char *rollNumber);
 void getPassword(char *passwd);
+bool isRollNumberRegistered(const char *rollNumber);
 
 void studentLogin()
 {
@@ -372,49 +419,59 @@ void studentLogin()
         printf("****************************************************\n");
         printf("* %-10s %s \t\t\t   *\n", "OPTION", "\t\tACTION");
         printf("----------------------------------------------------\n");
-        printf("*   %-10d %s \t\t   *\n", 1, "\t\tRegister");
-        printf("*   %-10d %s  \t\t\t   *\n", 2, "\t\tLogin");
+        printf("*   %-10d %s \t\t   *\n", 1, "\t\tVoter Register");
+        printf("*   %-10d %s  \t           *\n", 2, "\t\tVoter Login");
         printf("****************************************************\n");
         printf("SELECT CHOICE   :");
         scanf("%d", &choice);
         if (choice > 2)
         {
             system("cls");
-            printf("Please enter the vaild option\n");
+            printf("Please enter a valid option\n");
         }
     } while (choice > 2);
     switch (choice)
     {
     case 1:
+        // Registration page
     registertion_page:
-        system("cls");
-        printf("****************************************************\n");
-        printf("*                 REGISTERTION                     *\n");
-        printf("****************************************************\n");
-        do
-        {
-            printf("\nEnter Roll Number (in the pattern XXUGXXXXX)  :");
-            scanf("%s", user.rollNumber);
-            while (getchar() != '\n')
-            {
-                ; // Discard any remaining characters in the input stream
-            }
-            if (!(isValidRollNumber(user.rollNumber)))
-            {
-                printf("Entered pattern does not match...!");
-                printf("\nPlease try again...!");
-            }
-        } while (!(isValidRollNumber(user.rollNumber)));
-        printf("Enter Username  :");
-        scanf("%s", user.username);
-        printf("Enter Password  :");
-        scanf("%s", user.passwd);
-        writeUserToFile(user);
-        printf("\t\tRegistration successful.....!\n");
-        printf("Please! Press (ENTER) for moving to Login Page.....");
-        getch();
+            system("cls");
+            printf("****************************************************\n");
+            printf("*                 REGISTRATION                     *\n");
+            printf("****************************************************\n");
 
+            char allowedRollNumbers[100][MAX_ROLL_NUM_LEN];
+            int numAllowedRollNumbers = loadAllowedRollNumbers(allowedRollNumbers);
+
+            do {
+                printf("\nEnter Roll Number (in the pattern XXUGXXXXX)  :");
+                scanf("%s", user.rollNumber);
+                while (getchar() != '\n') { ; }
+
+                if (!isEligible(user.rollNumber, allowedRollNumbers, numAllowedRollNumbers)) {
+                    printf("You are not eligible for registration.\n");
+                    return;
+                }
+                if (isRollNumberRegistered(user.rollNumber)) {
+        printf("You are already registered. Please log in instead.\n");
+        return; // Exit the registration process
+    }
+            } 
+            
+            while (!isValidRollNumber(user.rollNumber));
+
+            printf("Enter Username  :");
+            scanf("%s", user.username);
+            printf("Enter Password  :");
+            getPassword(user.passwd);
+
+            writeUserToFile(user);
+
+            printf("\n\nRegistration successful.....!\n");
+            break;
+        
     case 2:
+        // Login page
     login_page:
         system("cls");
         printf("****************************************************\n");
@@ -442,7 +499,7 @@ void studentLogin()
                 printf("\nPlease! Press (ENTER) to apply for the vote.....");
                 getch();
                 system("cls");
-                getchar(); // Consume newline character
+                getchar();
 
                 // Display the list of candidates
 
@@ -703,4 +760,54 @@ void saveCandidateData()
     }
     fclose(file);
     printf("Candidates saved successfully.\n");
+}
+// Function to load allowed roll numbers from a file
+int loadAllowedRollNumbers(char allowedRollNumbers[][MAX_ROLL_NUM_LEN])
+{
+    FILE *file = fopen("allowedstudents.txt", "r");
+    if (file == NULL)
+    {
+        printf("Error opening allowed students file!\n");
+        exit(1);
+    }
+    int count = 0;
+    while (fgets(allowedRollNumbers[count], MAX_ROLL_NUM_LEN, file) != NULL)
+    {
+        // Remove newline character
+        allowedRollNumbers[count][strcspn(allowedRollNumbers[count], "\n")] = '\0';
+        count++;
+    }
+    fclose(file);
+    return count;
+}
+
+// Function to check if roll number is eligible
+bool isEligible(const char *rollNumber, char allowedRollNumbers[][MAX_ROLL_NUM_LEN], int numAllowedRollNumbers)
+{
+    for (int i = 0; i < numAllowedRollNumbers; i++)
+    {
+        if (strcmp(rollNumber, allowedRollNumbers[i]) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isRollNumberRegistered(const char *rollNumber) {
+    FILE *file = fopen("Users.txt", "r");
+    if (file == NULL) {
+        return false; // Assume roll number is not registered if file doesn't exist
+    }
+    char line[1024];
+    while (fgets(line, sizeof(line), file)) {
+        char *token;
+        token = strtok(line, ",");
+        if (strcmp(token, rollNumber) == 0) {
+            fclose(file);
+            return true; // Roll number found in file
+        }
+    }
+    fclose(file);
+    return false; // Roll number not found in file
 }
