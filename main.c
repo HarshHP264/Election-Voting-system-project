@@ -17,6 +17,7 @@ struct tm* localTime;
 bool hasVoted(const char *rollNumber);
 void writeVotedRollNumber(const char *rollNumber);
 // Function prototypes
+void writeVotedRollNumberToNota(const char *rollNumber);
 #define VOTED_FILE "voted.txt"
 void adminLogin();
 void studentLogin();
@@ -275,57 +276,69 @@ admin_login:
                  time(&currentTime);
     localTime = localtime(&currentTime);
 
-    printf("Date: %s", asctime(localTime));
-                printf("*********************************************\n");
-                printf("*              ELECTION RESULT              *\n");
-                printf("*********************************************\n");
+  printf("Date: %s", asctime(localTime));
+printf("*********************************************\n");
+printf("*              ELECTION RESULT              *\n");
+printf("*********************************************\n");
 
-                // Array to store the vote counts for each candidate
-                totalvotes = 0;
-                for (int i = 0; i < numCandidates; i++)
-                {
-                    voteCounts[i] = 0;
-                }
+// Array to store the vote counts for each candidate
+totalvotes = 0;
+for (int i = 0; i < numCandidates; i++)
+{
+    voteCounts[i] = 0;
+}
 
-                // Iterate through each candidate's txt file and count the votes
-                for (int i = 0; i < numCandidates; i++)
-                {
-                    sprintf(filename, "%s.txt", candidateNames[i]);
-                    FILE *file = fopen(filename, "r");
-                    if (file != NULL)
-                    {
-                        char line[1024];
-                        while (fgets(line, sizeof(line), file))
-                        {
-                            voteCounts[i]++;
-                            totalvotes++;
-                        }
-                        fclose(file);
-                    }
-                }
+// Count votes for each candidate
+for (int i = 0; i < numCandidates; i++)
+{
+    sprintf(filename, "%s.txt", candidateNames[i]);
+    FILE *file = fopen(filename, "r");
+    if (file != NULL)
+    {
+        char line[1024];
+        while (fgets(line, sizeof(line), file))
+        {
+            voteCounts[i]++;
+            totalvotes++;
+        }
+        fclose(file);
+    }
+}
 
-                for (int i = 1; i < numCandidates; i++)
-                {
-                    if (voteCounts[i] > voteCounts[maxVotesIndex])
-                    {
-                        maxVotesIndex = i;
-                    }
-                }
+// Count votes for NOTA from "nota_votes.txt" file
+FILE *notaFile = fopen("nota_votes.txt", "r");
+int notaCount = 0; // Initialize NOTA vote count
+if (notaFile != NULL)
+{
+    char line[MAX_ROLL_NUM_LEN];
+    while (fgets(line, sizeof(line), notaFile))
+    {
+        // Check if the line is not empty
+        if (line[0] != '\n') {
+            notaCount++;
+        }
+    }
+    fclose(notaFile);
+}
 
-                // Display the results
-                printf("Candidate\tVotes\tPercentage\n");
-                for (int i = 0; i < numCandidates; i++)
-                {
-                    float percentage = (float)voteCounts[i] / totalvotes * 100;
-                    printf("%s\t\t%d\t%.2f%%\n", candidateNames[i], voteCounts[i], percentage);
-                }
-                printf("=============================================\n");
-                printf("Winner: %s\n", candidateNames[maxVotesIndex]);
-                printf("=============================================\n");
-                printf("Kindly press (ENTER) to proceed to MAIN MENU.");
-                getch();
-                system("cls");
-                break;
+// Display the results
+printf("Candidate\tVotes\tPercentage\n");
+for (int i = 0; i < numCandidates; i++)
+{
+    float percentage = (float)voteCounts[i] / totalvotes * 100;
+    printf("%s\t\t%d\t%.2f%%\n", candidateNames[i], voteCounts[i], percentage);
+}
+// Display NOTA only if there are votes
+if (notaCount > 0) {
+    printf("NOTA\t\t%d\t%.2f%%\n", notaCount, (float)notaCount / totalvotes * 100); // Display NOTA vote count and percentage
+}
+printf("=============================================\n");
+printf("Winner: %s\n", candidateNames[maxVotesIndex]);
+printf("=============================================\n");
+printf("Kindly press (ENTER) to proceed to MAIN MENU.");
+getch();
+system("cls"); 
+break;
 
             case 4:
                 if (numCandidates > 0)
@@ -512,43 +525,47 @@ void studentLogin()
                 }
 
                 // Input vote choice
-                int voteChoice;
-                printf("Select Candidate to Vote    :");
-                scanf("%d", &voteChoice);
+               int voteChoice;
+printf("Select Candidate to Vote :");
+scanf("%d", &voteChoice);
 
-                // Validate vote choice
-                if (voteChoice < 1 || voteChoice > numCandidates)
-                {
-                    printf("Invalid vote choice! Please select a valid candidate number.\n");
-                }
-                else
-                {
-                    // Check if the student has already voted for any candidate
-                    if (hasVoted(rollNumber))
-                    {
-                        printf("You have already voted! You cannot vote again.\n");
-                        goto end_voting;
-                    }
-                    // Write student's roll number to the voted file
-                    writeVotedRollNumber(rollNumber);
-                    // Write student's roll number and username to the chosen candidate's file
-                    sprintf(filename, "%s.txt", candidateNames[voteChoice - 1]);
-                    FILE *file = fopen(filename, "a");
-                    if (file == NULL)
-                    {
-                        printf("Error opening file for vote! Please try again later.\n");
-                    }
-                    else
-                    {
-                        // printf(user.rollNumber);
-                        fprintf(file, "%s\n", user.rollNumber);
-                        fclose(file);
-                        printf("Vote recorded successfully!\n");
-                    }
-                    printf("Kindly press (ENTER) to proceed to next voting.");
-                    getch();
-                    system("cls");
-                }
+if (voteChoice == 0) {
+        printf("You have chosen NOTA. Your vote will be recorded as None of the Above.\n");
+    // Record the vote for NOTA
+    writeVotedRollNumberToNota(rollNumber); // Function to write the roll number to "nota_votes.txt"
+    printf("Kindly press (ENTER) to proceed to next voting.");
+    getch();
+    system("cls");
+
+} else if (voteChoice < 1 || voteChoice > numCandidates) {
+    printf("Invalid vote choice! Please select a valid candidate number.\n");
+} else {
+    // Check if the student has already voted for any candidate
+    if (hasVoted(rollNumber))
+    {
+        printf("You have already voted! You cannot vote again.\n");
+        goto end_voting;
+    }
+    // Write student's roll number to the voted file
+    writeVotedRollNumber(rollNumber);
+    // Write student's roll number and username to the chosen candidate's file
+    sprintf(filename, "%s.txt", candidateNames[voteChoice - 1]);
+    FILE *file = fopen(filename, "a");
+    if (file == NULL)
+    {
+        printf("Error opening file for vote! Please try again later.\n");
+    }
+    else
+    {
+        fprintf(file, "%s\n", user.rollNumber);
+        fclose(file);
+        printf("Vote recorded successfully!\n");
+    }
+    printf("Kindly press (ENTER) to proceed to next voting.");
+    getch();
+    system("cls");
+}
+
             end_voting:
                 break;
             }
@@ -741,6 +758,9 @@ void loadCandidateData()
         candidateNames[numCandidates][strcspn(candidateNames[numCandidates], "\n")] = '\0'; // Remove newline character
         numCandidates++;
     }
+    // Add NOTA as a candidate
+    strcpy(candidateNames[numCandidates], "NOTA");
+    numCandidates++;
     fclose(file);
     printf("Candidates loaded successfully.\n");
 }
@@ -810,4 +830,20 @@ bool isRollNumberRegistered(const char *rollNumber) {
     }
     fclose(file);
     return false; // Roll number not found in file
+}
+
+
+// Function definition
+void writeVotedRollNumberToNota(const char *rollNumber)
+{
+    FILE *notaFile = fopen("nota_votes.txt", "a");
+    if (notaFile != NULL)
+    {
+        fprintf(notaFile, "%s\n", rollNumber);
+        fclose(notaFile);
+    }
+    else
+    {
+        printf("Error opening nota_votes.txt for writing.\n");
+    }
 }
